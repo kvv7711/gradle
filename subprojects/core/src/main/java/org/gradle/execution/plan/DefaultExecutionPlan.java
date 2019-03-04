@@ -104,6 +104,7 @@ public class DefaultExecutionPlan implements ExecutionPlan {
     private final Map<File, String> canonicalizedFileCache = Maps.newIdentityHashMap();
     private final Map<Pair<Node, Node>, Boolean> reachableCache = Maps.newHashMap();
     private final Set<Node> dependenciesCompleteCache = Sets.newHashSet();
+    private final Set<Node> dependenciesWithChanges = Sets.newHashSet();
     private final WorkerLeaseService workerLeaseService;
     private final GradleInternal gradle;
 
@@ -685,7 +686,11 @@ public class DefaultExecutionPlan implements ExecutionPlan {
             return true;
         }
 
+        if (!(node instanceof TaskNodeFactory.TaskInAnotherBuild) && !dependenciesWithChanges.contains(node)) {
+            return false;
+        }
         boolean dependenciesComplete = node.allDependenciesComplete();
+        dependenciesWithChanges.remove(node);
         if (dependenciesComplete) {
             dependenciesCompleteCache.add(node);
         }
@@ -852,6 +857,7 @@ public class DefaultExecutionPlan implements ExecutionPlan {
 
     private void recordNodeCompleted(Node node) {
         runningNodes.remove(node);
+        dependenciesWithChanges.addAll(node.getDependencyPredecessors());
         MutationInfo mutations = this.mutations.get(node);
         for (Node producer : mutations.producingNodes) {
             MutationInfo producerMutations = this.mutations.get(producer);
